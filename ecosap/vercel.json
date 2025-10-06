@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "builds": [
+    { "src": "api/index.ts", "use": "@vercel/node" }
+  ],
+  "routes": [
+    { "src": "/(.*)", "dest": "/api/index.ts" }
+  ],
+  "env": {
+    "DB_CONN_STRING": "@db_conn_string",
+    "JWT_SECRET": "@jwt_secret",
+    "AREA_SERVICE_URL": "@area_service_url"
+  }
+}
+

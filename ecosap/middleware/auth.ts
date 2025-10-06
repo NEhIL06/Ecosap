@@ -50,6 +50,8 @@ export const auth = async (req: Request, res: Response, next: NextFunction) => {
         
         console.log("Authentication successful");
         req.user = user;
+        // Backward compatibility for handlers reading from body
+        (req as any).body = { ...(req as any).body, user };
         next();
     } catch (error: any) {
         console.error("Auth error:", error);

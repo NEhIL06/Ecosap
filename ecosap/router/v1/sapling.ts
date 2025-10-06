@@ -56,8 +56,9 @@ saplingRoute.post("/credits", auth, upload.single('image'), async (req, res) => 
 
         console.log('Sending request to Python service...');
 
-        // Send request to localhost:5000/area
-        const areaResponse = await axios.post('http://127.0.0.1:5000/area', formData, {
+        // Send request to python area service
+        const areaServiceUrl = process.env.AREA_SERVICE_URL || 'http://127.0.0.1:5000/area';
+        const areaResponse = await axios.post(areaServiceUrl, formData, {
             headers: {
                 ...formData.getHeaders()
             },
