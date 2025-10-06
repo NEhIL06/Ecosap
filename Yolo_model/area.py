@@ -3,6 +3,8 @@ from fastapi import FastAPI, File, UploadFile, Form
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from ultralytics import YOLO
+import os
+from pathlib import Path
 import numpy as np
 from PIL import Image
 import io
@@ -20,8 +22,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Load trained YOLO model
-MODEL_PATH = "F:\\New folder\\Yolo_model\\runs\\segment\\tree_crowns\\weights\\best.pt"
+# Load trained YOLO model (resolve relative to this file unless MODEL_PATH env provided)
+DEFAULT_MODEL_PATH = Path(__file__).parent / "runs" / "segment" / "tree_crowns" / "weights" / "best.pt"
+MODEL_PATH = os.getenv("MODEL_PATH", str(DEFAULT_MODEL_PATH))
 model = YOLO(MODEL_PATH)
 
 
