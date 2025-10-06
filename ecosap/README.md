@@ -167,7 +167,7 @@ curl -X POST http://localhost:3000/api/v1/sapling/credits \
 
 ## Auth Middleware
 
-The API expects `Authorization: Bearer <token>`. Tokens are verified using `JWT_SECRET`. On success, the user document is attached to `req.body.user`.
+The API expects `Authorization: Bearer <token>`. Tokens are verified using `JWT_SECRET`. On success, the user document is attached to `req.user`.
 
 Possible errors:
 - 402: `{ message: "token is missing" }`

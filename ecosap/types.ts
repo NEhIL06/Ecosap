@@ -7,7 +7,7 @@ export const signinSchema = z.object({
 
 
 export const signupSchema = z.object({
-    name:z.string(),
+    username:z.string(),
     email: z.string().email(),
     password:z.string().min(6).max(20),
     phone:z.string().min(10).max(10),
@@ -17,5 +17,6 @@ export const signupSchema = z.object({
         longitude:z.number()
     }),
     aadhar_number:z.string().min(12).max(12),
-    signature:z.string()
+    signature:z.string(),
+    ecocredits: z.number().optional()
 })

@@ -12,20 +12,14 @@ export const connection = mongoose.connect(db_string)
 .then(()=>{console.log("Database connected")})
 .catch((err)=>{console.log(err)});
 
-
-
 app.use(express.json());
 
-app.use(cors());
-
-app.get("/", (req, res) => {
-    res.send("Hello World");
-});
-
-
-
-
-
+app.use(cors({
+    origin: true,
+    credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization"],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+}));
 
 app.use("/api/v1", route);
 

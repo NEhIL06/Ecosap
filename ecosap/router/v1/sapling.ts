@@ -2,65 +2,105 @@ import { Router } from 'express';
 import { auth } from '../../middleware/auth';
 import axios from 'axios';
 import FormData from 'form-data';
-import users from '../../models/users'; // Adjust the path as needed
+import users from '../../models/users';
+import multer from 'multer';
 
 export const saplingRoute = Router();
 
-saplingRoute.post("/credits", auth, async (req, res) => {
-    try {
-        const userId = req.body.user._id || req.body.user.id; // Get user ID from auth middleware
-        const { image, gsd } = req.body; // Expecting image (base64 or file) and gsd in request body
-        
-        // Validate required fields
-        if (!image || !gsd) {
-            return res.status(400).json({ 
-                error: "Image and GSD information are required" 
-            });
-        }
-
-        // Prepare FormData to send to the area calculation endpoint
-        const formData = new FormData();
-        
-        // If image is a file from multer, use it directly
-        // If it's base64, you may need to convert it to a buffer
-        if (req.body) {
-            formData.append('image', req.body.buffer, req.body.originalname);
-        } else if (typeof image === 'string') {
-            // Assuming base64 string
-            const buffer = Buffer.from(image, 'base64');
-            formData.append('image', buffer, 'image.jpg');
+// Configure multer for memory storage
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+        fileSize: 10 * 1024 * 1024 // 10MB limit
+    },
+    fileFilter: (req, file, cb) => {
+        // Accept only images
+        if (file.mimetype.startsWith('image/')) {
+            cb(null, true);
         } else {
-            formData.append('image', image);
+            cb(new Error('Only image files are allowed'));
         }
-        
-        formData.append('gsd', gsd.toString());
+    }
+});
 
-        // Send request to localhost:5000/area
-        const areaResponse = await axios.post('http://localhost:5000/area', formData, {
-            headers: formData.getHeaders(),
-            timeout: 30000 // 30 second timeout
+saplingRoute.post("/credits", auth, upload.single('image'), async (req, res) => {
+    try {
+        const userId = req.user._id || req.user.id;
+        const gsdValue = parseFloat(req.body.gsd);
+        
+        // Validate uploaded file
+        if (!req.file) {
+            return res.status(400).json({ error: "Image file is required" });
+        }
+
+        // Validate GSD
+        if (isNaN(gsdValue) || !isFinite(gsdValue) || gsdValue <= 0) {
+            return res.status(400).json({ error: "gsd must be a positive number" });
+        }
+
+        console.log('Processing image upload:', {
+            filename: req.file.originalname,
+            size: req.file.size,
+            mimetype: req.file.mimetype,
+            gsd: gsdValue
         });
 
-        const calculatedArea = areaResponse.data.area; // Adjust based on actual response structure
+        // Prepare FormData to send to the area calculation endpoint
+        // IMPORTANT: FastAPI expects field name 'file', not 'image'
+        const formData = new FormData();
+        formData.append('file', req.file.buffer, {
+            filename: req.file.originalname || 'image.jpg',
+            contentType: req.file.mimetype
+        });
+        formData.append('gsd', gsdValue.toString());
 
-        if (!calculatedArea || calculatedArea <= 0) {
-            return res.status(400).json({ 
-                error: "Invalid area calculation received" 
+        console.log('Sending request to Python service...');
+
+        // Send request to localhost:5000/area
+        const areaResponse = await axios.post('http://127.0.0.1:5000/area', formData, {
+            headers: {
+                ...formData.getHeaders()
+            },
+            timeout: 30000, // 30 second timeout
+            maxContentLength: Infinity,
+            maxBodyLength: Infinity
+        });
+
+        console.log('Response from Python service:', areaResponse.data);
+
+        // Check if detection was successful
+        if (!areaResponse.data.success) {
+            return res.status(200).json({
+                success: false,
+                message: areaResponse.data.message || "No trees detected in the image",
+                area: 0,
+                creditsAdded: 0,
+                totalCredits: req.user.ecocredits
             });
         }
 
-        // Calculate credits based on area
-        // Formula: More growth (area) = More credits
-        // You can adjust this formula based on your requirements
-        const creditsToAdd = calculateCredits(calculatedArea);
+        const calculatedArea = areaResponse.data.total_area_m2;
+
+        if (!calculatedArea || calculatedArea <= 0) {
+            return res.status(200).json({
+                success: false,
+                message: "No tree area detected in the image",
+                area: 0,
+                creditsAdded: 0,
+                totalCredits: req.user.ecocredits
+            });
+        }
+
+        // Calculate credits based on area and gsd
+        const creditsToAdd = calculateCredits(calculatedArea, gsdValue);
 
         // Update user's ecocredits in database
         const updatedUser = await users.findByIdAndUpdate(
             userId,
             { 
-                $inc: { ecocredits: creditsToAdd } // Increment credits
+                $inc: { ecocredits: creditsToAdd }
             },
-            { new: true, select: 'ecocredits username email' } // Return updated document
+            { new: true, select: 'ecocredits username email' }
         );
 
         if (!updatedUser) {
@@ -69,13 +109,28 @@ saplingRoute.post("/credits", auth, async (req, res) => {
             });
         }
 
-        // Return success response
+        console.log('Credits updated successfully:', {
+            userId,
+            area: calculatedArea,
+            creditsAdded: creditsToAdd,
+            totalCredits: updatedUser.ecocredits
+        });
+
+        // Return success response with detailed tree data
         res.status(200).json({
             success: true,
             area: calculatedArea,
             creditsAdded: creditsToAdd,
             totalCredits: updatedUser.ecocredits,
-            message: `Successfully added ${creditsToAdd} credits based on area ${calculatedArea}`
+            message: `Successfully added ${creditsToAdd} credits based on area ${calculatedArea.toFixed(2)} m²`,
+            treeDetails: {
+                totalTrees: areaResponse.data.total_trees,
+                totalArea: areaResponse.data.total_area_m2,
+                averageArea: areaResponse.data.average_area_m2,
+                totalCircumference: areaResponse.data.total_circumference_m,
+                gsdUsed: gsdValue,
+                trees: areaResponse.data.trees
+            }
         });
 
     } catch (error: any) {
@@ -84,13 +139,37 @@ saplingRoute.post("/credits", auth, async (req, res) => {
         // Handle specific error types
         if (error.code === 'ECONNREFUSED') {
             return res.status(503).json({ 
-                error: "Area calculation service is unavailable" 
+                error: "Area calculation service is unavailable",
+                details: "Please ensure the Python service is running on port 5000"
+            });
+        }
+        
+        if (error.code === 'ETIMEDOUT') {
+            return res.status(504).json({ 
+                error: "Request timeout",
+                details: "The area calculation took too long"
             });
         }
         
         if (axios.isAxiosError(error)) {
+            // Log the actual error response from Python service
+            console.error('Python service error:', error.response?.data);
+            
             return res.status(500).json({ 
                 error: "Failed to calculate area",
+                details: error.response?.data?.error || error.response?.data?.detail || error.message 
+            });
+        }
+
+        if (error instanceof multer.MulterError) {
+            if (error.code === 'LIMIT_FILE_SIZE') {
+                return res.status(400).json({ 
+                    error: "File too large",
+                    details: "Maximum file size is 10MB"
+                });
+            }
+            return res.status(400).json({ 
+                error: "File upload error",
                 details: error.message 
             });
         }
@@ -103,100 +182,75 @@ saplingRoute.post("/credits", auth, async (req, res) => {
 });
 
 
-// function calculateCredits(area: number): number {
-//     // Example formulas (choose one or create your own):
-    
-//     // Option 1: Linear calculation (1 credit per square meter)
-//     const credits = Math.floor(area * 1);
-    
-//     // Option 2: Tiered calculation
-//     // if (area < 10) return Math.floor(area * 1);
-//     // if (area < 50) return Math.floor(area * 1.5);
-//     // if (area < 100) return Math.floor(area * 2);
-//     // return Math.floor(area * 2.5);
-    
-//     // Option 3: Logarithmic (rewards larger areas but with diminishing returns)
-//     // const credits = Math.floor(area * Math.log10(area + 1) * 10);
-    
-//     return credits > 0 ? credits : 1; // Ensure at least 1 credit
-// }
-
 // Credit calculation function with multiple factors
 function calculateCredits(area: number, gsd?: number, additionalFactors?: {
-    vegetationDensity?: number; // 0-1 scale
-    previousArea?: number; // For growth comparison
-    treeSpecies?: string; // Different species have different carbon absorption
-    locationMultiplier?: number; // Regional importance
+    vegetationDensity?: number;
+    previousArea?: number;
+    treeSpecies?: string;
+    locationMultiplier?: number;
 }): number {
     
     // Base credits from area (square meters)
     let baseCredits = 0;
     
-    // Tiered calculation with diminishing returns for very large areas
-    // This prevents gaming the system with satellite imagery of forests
+    // Tiered calculation with diminishing returns
     if (area <= 10) {
-        baseCredits = area * 10; // High reward for small saplings (10 credits/m²)
+        baseCredits = area * 10;
     } else if (area <= 50) {
-        baseCredits = 100 + ((area - 10) * 8); // 8 credits/m²
+        baseCredits = 100 + ((area - 10) * 8);
     } else if (area <= 100) {
-        baseCredits = 420 + ((area - 50) * 6); // 6 credits/m²
+        baseCredits = 420 + ((area - 50) * 6);
     } else if (area <= 500) {
-        baseCredits = 720 + ((area - 100) * 4); // 4 credits/m²
+        baseCredits = 720 + ((area - 100) * 4);
     } else if (area <= 1000) {
-        baseCredits = 2320 + ((area - 500) * 2); // 2 credits/m²
+        baseCredits = 2320 + ((area - 500) * 2);
     } else {
-        // Very large areas get logarithmic scaling to prevent abuse
         baseCredits = 3320 + (Math.log10(area - 999) * 500);
     }
     
-    // GSD (Ground Sample Distance) Quality Factor
-    // Lower GSD = higher resolution = more accurate = higher multiplier
+    // GSD Quality Factor
     let gsdMultiplier = 1.0;
     if (gsd) {
         if (gsd <= 0.5) {
-            gsdMultiplier = 1.5; // Excellent quality (< 50cm/pixel)
+            gsdMultiplier = 1.5;
         } else if (gsd <= 1.0) {
-            gsdMultiplier = 1.3; // Very good quality (50cm-1m/pixel)
+            gsdMultiplier = 1.3;
         } else if (gsd <= 2.0) {
-            gsdMultiplier = 1.15; // Good quality (1-2m/pixel)
+            gsdMultiplier = 1.15;
         } else if (gsd <= 5.0) {
-            gsdMultiplier = 1.0; // Acceptable quality (2-5m/pixel)
+            gsdMultiplier = 1.0;
         } else {
-            gsdMultiplier = 0.8; // Lower quality reduces credits
+            gsdMultiplier = 0.8;
         }
     }
     
-    // Apply GSD multiplier
     let adjustedCredits = baseCredits * gsdMultiplier;
     
-    // Vegetation Density Bonus (if available)
-    // Denser vegetation = more carbon sequestration
+    // Vegetation Density Bonus
     if (additionalFactors?.vegetationDensity) {
-        const densityBonus = additionalFactors.vegetationDensity * 0.5; // Up to 50% bonus
+        const densityBonus = additionalFactors.vegetationDensity * 0.5;
         adjustedCredits *= (1 + densityBonus);
     }
     
-    // Growth Bonus - reward continued growth
+    // Growth Bonus
     if (additionalFactors?.previousArea && additionalFactors.previousArea > 0) {
         const growthRate = (area - additionalFactors.previousArea) / additionalFactors.previousArea;
         
         if (growthRate > 0) {
-            // Positive growth gets bonus (up to 100% bonus for doubling)
-            const growthBonus = Math.min(growthRate, 1.0) * 0.3; // Max 30% bonus
+            const growthBonus = Math.min(growthRate, 1.0) * 0.3;
             adjustedCredits *= (1 + growthBonus);
         } else if (growthRate < -0.2) {
-            // Significant shrinkage (>20%) gets penalty
             adjustedCredits *= 0.7;
         }
     }
     
-    // Tree Species Multiplier (carbon sequestration rates)
+    // Tree Species Multiplier
     const speciesMultipliers: { [key: string]: number } = {
-        'oak': 1.3,           // High carbon absorption
+        'oak': 1.3,
         'pine': 1.25,
-        'eucalyptus': 1.4,    // Very high growth and absorption
-        'mangrove': 1.5,      // Exceptional carbon storage
-        'bamboo': 1.35,       // Fast growing
+        'eucalyptus': 1.4,
+        'mangrove': 1.5,
+        'bamboo': 1.35,
         'teak': 1.2,
         'neem': 1.15,
         'fruit_tree': 1.1,
@@ -209,14 +263,12 @@ function calculateCredits(area: number, gsd?: number, additionalFactors?: {
         adjustedCredits *= speciesMultiplier;
     }
     
-    // Location-based multiplier (regional importance)
-    // e.g., deforestation hotspots, urban areas, water catchment zones
+    // Location-based multiplier
     if (additionalFactors?.locationMultiplier) {
         adjustedCredits *= additionalFactors.locationMultiplier;
     }
     
-    // Final rounding and minimum credit
     const finalCredits = Math.floor(adjustedCredits);
     
-    return Math.max(finalCredits, 1); // Minimum 1 credit
+    return Math.max(finalCredits, 1);
 }
