@@ -2,9 +2,9 @@ services:
   - type: web
     runtime: python
     name: yolo-tree-analyzer
-    rootDir: Yolo_model/api
-    buildCommand: pip install -r ../requirements.txt
-    startCommand: uvicorn area:app --host 0.0.0.0 --port $PORT
+    rootDir: Yolo_model
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn api/area:app --host 0.0.0.0 --port $PORT
     plan: starter
     envVars:
       - key: MODEL_PATH
