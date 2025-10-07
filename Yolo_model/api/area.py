@@ -27,6 +27,10 @@ DEFAULT_MODEL_PATH = Path(__file__).parent / "runs" / "segment" / "tree_crowns" 
 MODEL_PATH = os.getenv("MODEL_PATH", str(DEFAULT_MODEL_PATH))
 model = YOLO(MODEL_PATH)
 
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    return {"status": "ok", "message": "Service is running"}    
 
 @app.post("/area")
 async def analyze_tree_image(
