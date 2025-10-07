@@ -4,10 +4,10 @@ services:
     name: yolo-tree-analyzer
     rootDir: Yolo_model
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn api/area:app --host 0.0.0.0 --port $PORT
+    startCommand: uvicorn api.area:app --host 0.0.0.0 --port $PORT
     plan: starter
     envVars:
       - key: MODEL_PATH
-        value: ../runs/segment/tree_crowns/weights/best.pt
+        value: runs/segment/tree_crowns/weights/best.pt
       - key: PYTHON_VERSION
         value: 3.12.0
