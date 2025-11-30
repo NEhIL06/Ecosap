@@ -1332,10 +1332,10 @@ SOFTWARE.
 
 ## 📊 Project Stats
 
-![GitHub Stars](https://img.shields.io/github/stars/yourusername/ecosap?style=social)
-![GitHub Forks](https://img.shields.io/github/forks/yourusername/ecosap?style=social)
-![GitHub Issues](https://img.shields.io/github/issues/yourusername/ecosap)
-![GitHub Pull Requests](https://img.shields.io/github/issues-pr/yourusername/ecosap)
+![GitHub Stars](https://img.shields.io/github/stars/NEhIL06/Ecosap?style=social)
+![GitHub Forks](https://img.shields.io/github/forks/NEhIL06/Ecosap?style=social)
+![GitHub Issues](https://img.shields.io/github/issues/NEhIL06/Ecosap)
+![GitHub Pull Requests](https://img.shields.io/github/issues-pr/NEhIL06/Ecosap)
 
 ---
 
