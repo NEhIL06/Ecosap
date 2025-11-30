@@ -162,14 +162,14 @@ sequenceDiagram
     API->>ML: POST /area<br/>(image, gsd)
     ML->>YOLO: Run Inference<br/>(conf=0.25, imgsz=1024)
     YOLO-->>ML: Segmentation Masks
-    ML->>ML: Calculate Areas<br/>(pixel → m²)
-    ML-->>API: {total_area_m2, trees[]}
+    ML->>ML: Calculate Areas<br/>pixel to sq meters
+    ML-->>API: total_area_m2, trees array
     
-    API->>API: calculateCredits()<br/>(area, gsd, factors)
-    API->>DB: Update User Credits<br/>$inc: {ecocredits}
+    API->>API: calculateCredits()<br/>area, gsd, factors
+    API->>DB: Update User Credits<br/>increment ecocredits
     DB-->>API: Updated User
     
-    API-->>FE: {success, creditsAdded,<br/>totalCredits, area, trees}
+    API-->>FE: success, creditsAdded,<br/>totalCredits, area, trees
     FE-->>User: Display Results
 ```
 
@@ -417,7 +417,7 @@ graph TD
     O --> P[Apply Location Factor]
     
     P --> Q[Final Credits<br/>Math.floor]
-    Q --> R[Update MongoDB<br/>$inc ecocredits]
+    Q --> R[Update MongoDB<br/>increment ecocredits]
     R --> S[200 OK + Response]
 ```
 
@@ -472,8 +472,8 @@ graph TD
     J --> K[For Each Mask]
     K --> L[Calculate Pixel Area<br/>mask.sum]
     L --> M[Convert to m²<br/>area_px * gsd²]
-    M --> N[Calculate Diameter<br/>2 * sqrt(area/π)]
-    N --> O[Calculate Circumference<br/>π * diameter]
+    M --> N["Calculate Diameter<br/>2 * sqrt area / pi"]
+    N --> O["Calculate Circumference<br/>pi * diameter"]
     
     O --> P[Aggregate Results]
     P --> Q[Return JSON<br/>total_area, trees[]]
