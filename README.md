@@ -476,7 +476,7 @@ graph TD
     N --> O["Calculate Circumference<br/>pi * diameter"]
     
     O --> P[Aggregate Results]
-    P --> Q[Return JSON<br/>total_area, trees[]]
+    P --> Q[Return JSON<br/>total_area, trees array]
 ```
 
 ### YOLO Model Details
